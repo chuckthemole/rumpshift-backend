@@ -136,6 +136,12 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
+.env.production
+*.env.local
+# But keep templates
+!.env.example
+!.env.template
 .envrc
 .venv
 env/

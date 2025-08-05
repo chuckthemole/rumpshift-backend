@@ -1,6 +1,7 @@
 from django.urls import path
-from .views import ArduinoStatus
+from .views import StartPumpView, toggle_view
 
 urlpatterns = [
-    path('status/', ArduinoStatus.as_view(), name='arduino-status'),
+    path("start-pump/", StartPumpView.as_view()),
+    path('toggle/<str:switch_id>/', toggle_view, name='toggle'),
 ]
