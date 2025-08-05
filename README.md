@@ -3,10 +3,12 @@
 A collection of Django services with shared utilities for microservices architecture.
 
 ## Structure
+```markdown
 ├── arduino_backend/        # Arduino IoT backend service
 ├── mountjoy_api/           # Main API service with Notion integration
 ├── requirements/           # Shared Python dependencies
 └── shared/                 # Common utilities (middleware, models, utils)
+```
 
 ## Quick Start
 
