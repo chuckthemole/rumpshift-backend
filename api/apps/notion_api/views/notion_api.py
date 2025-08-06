@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 # Load the Notion API token and (optionally) a default database ID from environment variables
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
+NOTION_VERSION = os.getenv("NOTION_VERSION")
 NOTION_BASE_URL = "https://api.notion.com/v1/"
 
 
@@ -23,7 +24,7 @@ def get_notion_database(request, db_id):
     headers = {
         "Authorization": f"Bearer {NOTION_API_KEY}",  # Use secure token
         # API version must match the version your integration supports
-        "Notion-Version": "2022-06-28",
+        "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     }
 
@@ -47,7 +48,7 @@ def search_notion_databases(request):
     url = NOTION_BASE_URL + "search"
     headers = {
         "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Notion-Version": "2022-06-28",
+        "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     }
 
@@ -112,7 +113,7 @@ def list_notion_page_contents(request, page_id):
     url = f"{NOTION_BASE_URL}blocks/{page_id}/children"
     headers = {
         "Authorization": f"Bearer {NOTION_API_KEY}",
-        "Notion-Version": "2022-06-28",
+        "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     }
 

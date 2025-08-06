@@ -5,7 +5,7 @@ A collection of Django services with shared utilities for microservices architec
 ## Structure
 ```markdown
 ├── arduino_backend/        # Arduino IoT backend service
-├── mountjoy_api/           # Main API service with Notion integration
+├── api/                    # Main API service with Notion integration
 ├── requirements/           # Shared Python dependencies
 └── shared/                 # Common utilities (middleware, models, utils)
 ```
@@ -23,7 +23,7 @@ cp .env.example .env
 
 # Run services (separate terminals)
 cd arduino_backend && python manage.py runserver 8001
-cd mountjoy_api && python manage.py runserver 8002
+cd api && python manage.py runserver 8002
 ```
 
 ## Services
