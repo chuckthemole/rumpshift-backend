@@ -30,6 +30,15 @@ DEBUG = os.getenv("DEBUG")
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
 
+# End points:
+ADMIN_URL = 'admin/'
+NOTION_API = 'api/notion/'
+ARDUINO_CONSUMER_API = 'api/arduino_consumer/'
+
+GET_NOTION_DATABASE = 'db/<str:db_id>/'
+SEARCH_NOTION_DATABASES = 'databases/'
+LIST_NOTION_PAGE_CONTENTS = 'page/<str:page_id>/'
+LOG_TO_NOTION = 'log/<str:source>'
 
 # Application definition
 
@@ -41,7 +50,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'apps.notion_api'
+    'apps.notion_api',
+    'apps.arduino_consumer_api'
 ]
 
 MIDDLEWARE = [
@@ -58,7 +68,8 @@ MIDDLEWARE = [
 # install django-cors-headers first: pip install django-cors-headers
 INSTALLED_APPS += ['corsheaders']
 MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + MIDDLEWARE
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", 'False').lower() in ('true', '1', 'yes', 'on')
+CORS_ALLOW_ALL_ORIGINS = os.getenv(
+    "CORS_ALLOW_ALL_ORIGINS", 'False').lower() in ('true', '1', 'yes', 'on')
 
 ROOT_URLCONF = 'api.urls'
 
@@ -131,3 +142,36 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{levelname}] {asctime} {name}: {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "[{levelname}] {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        # Your module
+        "": {  # root logger
+            "handlers": ["console"],
+            "level": "INFO",  # show INFO+ messages
+        },
+        "django": {  # Django internal logging
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

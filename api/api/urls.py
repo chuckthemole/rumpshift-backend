@@ -16,8 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/notion/', include('apps.notion_api.urls')),
+    path(settings.ADMIN_URL, admin.site.urls),
+    path(settings.NOTION_API, include('apps.notion_api.urls')),
+    path(settings.ARDUINO_CONSUMER_API, include('apps.arduino_consumer_api.urls')),
 ]

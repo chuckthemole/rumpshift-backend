@@ -15,6 +15,11 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+
+    # Add repo root to sys.path
+    sys.path.append(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))
+
     execute_from_command_line(sys.argv)
 
 
