@@ -1,0 +1,9 @@
+{
+    "Count": "number",
+    "Duration": "number",
+    "Start Timestamp": "date",
+    "End Timestamp": "date",
+    "Notes": "rich_text",
+    "User": "title",
+    "Category": "select"
+}

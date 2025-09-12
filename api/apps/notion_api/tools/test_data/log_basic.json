@@ -1,0 +1,6 @@
+{
+    "User": "title",
+    "Timestamp": "date",
+    "Duration": "number",
+    "Notes": "rich_text"
+}

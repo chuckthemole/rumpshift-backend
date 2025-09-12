@@ -1,0 +1,6 @@
+{
+    "Player": "title",
+    "Score": "number",
+    "Level": "number",
+    "Completed": "date"
+}

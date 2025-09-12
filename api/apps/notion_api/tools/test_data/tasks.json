@@ -1,0 +1,7 @@
+{
+    "Task Name": "title",
+    "Assigned To": "rich_text",
+    "Priority": "number",
+    "Due Date": "date",
+    "Status": "rich_text"
+}

@@ -1,49 +1,111 @@
 import os
+from datetime import datetime, timezone
 import requests
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-# Load Notion credentials from environment variables
+# ----------------------------
+# Environment
+# ----------------------------
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
-NOTION_VERSION = os.getenv("NOTION_VERSION")
+NOTION_VERSION = os.getenv("NOTION_VERSION", "2022-06-28")
 NOTION_BASE_URL = "https://api.notion.com/v1/"
-# Optional: default log database
 NOTION_LOG_DATABASE_ID = os.getenv("NOTION_LOG_DATABASE_ID")
 
 
-@api_view(['POST'])
-def log_to_notion(request, source):
+# ----------------------------
+# Helper function: Convert values to Notion properties
+# ----------------------------
+def notion_property(value, prop_name=None):
     """
-    Relay an Arduino log message to a Notion database.
+    Convert Python values to a Notion property object.
+    Supports title, string, number, date.
+    """
+    if prop_name == "User":
+        # Title property
+        return {"title": [{"text": {"content": value}}]}
+    elif isinstance(value, str):
+        return {"rich_text": [{"text": {"content": value}}]}
+    elif isinstance(value, (int, float)):
+        return {"number": value}
+    elif isinstance(value, dict) and "start" in value:
+        return {"date": value}
+    else:
+        return {"rich_text": [{"text": {"content": str(value)}}]}
 
-    URL Param:
-        source (str): Identifier of the device sending the log, e.g., 'coffee_grinder'.
 
-    Request Body (JSON):
-        Arbitrary log data. Will automatically include the 'source' field.
+# ----------------------------
+# API Endpoint
+# ----------------------------
+@api_view(['POST'])
+def log_to_notion(request):
+    """
+    Log an entry to a Notion database.
+
+    Expects JSON body:
+    {
+        "database_id": "<db_id>",
+        "Count": <int>,
+        "Start Timestamp": {"start": "ISO8601 string"},
+        "End Timestamp": {"start": "ISO8601 string"},
+        "User": "<string>",
+        "Notes": "<string>"
+    }
 
     Returns:
-        JSON response from Notion or error details.
+        JSON response from Notion API or error details.
     """
+    data = request.data
+    if not isinstance(data, dict):
+        return Response({"error": "Invalid JSON payload."}, status=400)
+
+    # Extract database_id
+    db_id = data.pop("database_id", NOTION_LOG_DATABASE_ID)
+    if not db_id:
+        return Response({"error": "No database ID provided."}, status=400)
+
+    # Validate start/end timestamps
+    start_ts = data.get("Start Timestamp", {}).get("start")
+    end_ts = data.get("End Timestamp", {}).get("start")
+
+    if not start_ts or not end_ts:
+        return Response({"error": "Start and End timestamps are required."}, status=400)
+
     try:
-        # Parse the incoming JSON from Arduino
-        payload = request.data
-    except Exception:
-        return Response({"error": "Invalid JSON payload"}, status=400)
+        # Parse ISO8601 timestamps
+        start_dt = datetime.fromisoformat(start_ts.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(end_ts.replace("Z", "+00:00"))
 
-    # Add the source to the payload
-    payload["source"] = source
+        # Calculate duration in seconds (can be converted to minutes/hours if needed)
+        duration_seconds = (end_dt - start_dt).total_seconds()
+        data["Duration"] = round(duration_seconds, 2)  # round to 2 decimals
+    except Exception as e:
+        return Response({"error": f"Invalid timestamp format: {str(e)}"}, status=400)
 
-    # Build request headers for Notion
+    # Convert properties for Notion
+    properties = {k: notion_property(v, k) for k, v in data.items()}
+
+    payload = {
+        "parent": {"database_id": db_id},
+        "properties": properties
+    }
+
     headers = {
         "Authorization": f"Bearer {NOTION_API_KEY}",
         "Notion-Version": NOTION_VERSION,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
     }
 
-    print('In log.py:::' + payload)
-
-    # Construct the URL for adding a new page to the log database
-    url = f"{NOTION_BASE_URL}pages"
-
-    # Format payload as a new Notion page (simple example with a 'properties'
+    try:
+        response = requests.post(
+            f"{NOTION_BASE_URL}pages", headers=headers, json=payload)
+        response.raise_for_status()
+        return Response({"status": "ok", "data": response.json()})
+    except requests.exceptions.HTTPError as e:
+        return Response({
+            "status": "error",
+            "error": str(e),
+            "response": response.text
+        }, status=response.status_code)
+    except requests.exceptions.RequestException as e:
+        return Response({"status": "error", "error": str(e)}, status=500)

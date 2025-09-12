@@ -1,0 +1,7 @@
+{
+    "Product Name": "title",
+    "SKU": "rich_text",
+    "Quantity": "number",
+    "Restock Date": "date",
+    "Notes": "rich_text"
+}

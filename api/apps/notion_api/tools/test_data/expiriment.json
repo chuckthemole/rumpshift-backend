@@ -1,0 +1,8 @@
+{
+    "Experiment": "title",
+    "Result": "rich_text",
+    "Start Time": "date",
+    "End Time": "date",
+    "Observations": "rich_text",
+    "Score": "number"
+}
