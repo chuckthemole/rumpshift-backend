@@ -1,0 +1,29 @@
+{
+    "coffees": [
+        {
+            "name": "Espresso",
+            "strength": "Strong",
+            "description": "A concentrated shot of coffee brewed under pressure."
+        },
+        {
+            "name": "Americano",
+            "strength": "Medium",
+            "description": "Espresso diluted with hot water for a smoother taste."
+        },
+        {
+            "name": "Latte",
+            "strength": "Mild",
+            "description": "Espresso with steamed milk and a light foam topping."
+        },
+        {
+            "name": "Cappuccino",
+            "strength": "Medium",
+            "description": "Equal parts espresso, steamed milk, and foam."
+        },
+        {
+            "name": "Cold Brew",
+            "strength": "Smooth",
+            "description": "Coffee steeped in cold water for 12+ hours, served chilled."
+        }
+    ]
+}
