@@ -31,14 +31,16 @@ DEBUG = os.getenv("DEBUG")
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
 
 # End points:
+# root
 ADMIN_URL = 'admin/'
 NOTION_API = 'api/notion/'
 ARDUINO_CONSUMER_API = 'api/arduino_consumer/'
 
+# notion_api
 GET_NOTION_DATABASE = 'db/<str:db_id>/'
 SEARCH_NOTION_DATABASES = 'databases/'
 LIST_NOTION_PAGE_CONTENTS = 'page/<str:page_id>/'
-LOG_TO_NOTION = 'log/<str:source>'
+LOG_TO_NOTION = 'log/'
 
 # Application definition
 
@@ -64,12 +66,30 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# ----------------------------
+# CORS configuration
+# ----------------------------
+from shared.utils.parsing import parse_env_list
 # Allow CORS for your React dev server (localhost:3000)
 # install django-cors-headers first: pip install django-cors-headers
 INSTALLED_APPS += ['corsheaders']
 MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + MIDDLEWARE
-CORS_ALLOW_ALL_ORIGINS = os.getenv(
-    "CORS_ALLOW_ALL_ORIGINS", 'False').lower() in ('true', '1', 'yes', 'on')
+# CORS_ALLOW_ALL_ORIGINS = os.getenv(
+#     "CORS_ALLOW_ALL_ORIGINS", 'False').lower() in ('true', '1', 'yes', 'on')
+
+# Allow credentials for Axios with withCredentials
+CORS_ALLOW_CREDENTIALS = True
+
+# Parse comma-separated allowed origins from env
+CORS_ALLOWED_ORIGINS = parse_env_list(os.getenv("CORS_ALLOWED_ORIGINS", ""))
+
+# Parse comma-separated regex patterns from env
+CORS_ALLOWED_ORIGIN_REGEXES = parse_env_list(
+    os.getenv("CORS_ALLOWED_ORIGIN_REGEXES", ""))
+
+# Optional: log to verify during startup
+print("CORS_ALLOWED_ORIGINS:", CORS_ALLOWED_ORIGINS)
+print("CORS_ALLOWED_ORIGIN_REGEXES:", CORS_ALLOWED_ORIGIN_REGEXES)
 
 ROOT_URLCONF = 'api.urls'
 

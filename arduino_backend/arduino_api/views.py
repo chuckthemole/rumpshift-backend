@@ -4,15 +4,15 @@ from django.conf import settings
 from arduino_client.client import ArduinoClient
 
 from django.http import JsonResponse
+# Arduino won't send CSRF tokens
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
 
-arduino = ArduinoClient(settings.ARDUINO_HOST, settings.ARDUINO_PORT)
-
 
 class StartPumpView(APIView):
     def post(self, request):
+        arduino = ArduinoClient(settings.ARDUINO_HOST, settings.ARDUINO_PORT)
         duration = request.data.get("duration", 1000)
         arduino.send_command("start_pump", {"duration": duration})
         return Response({"status": "sent"})
@@ -37,3 +37,26 @@ def toggle_view(request, switch_id):
             return JsonResponse({"state": state})
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=400)
+
+
+@csrf_exempt
+def receive_print_job(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return JsonResponse({"status": "error", "message": "Invalid JSON"}, status=400)
+
+        # Example: expect {"printer_id": "office1", "job": "Hello world"}
+        printer_id = data.get("printer_id")
+        job_data = data.get("job")
+
+        if not printer_id or not job_data:
+            return JsonResponse({"status": "error", "message": "Missing fields"}, status=400)
+
+        # TODO: enqueue to a print system, save to DB, etc.
+        print(f"Received print job for printer {printer_id}: {job_data}")
+
+        return JsonResponse({"status": "ok", "message": "Job received"})
+
+    return JsonResponse({"status": "error", "message": "Invalid method"}, status=405)
