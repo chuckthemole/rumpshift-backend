@@ -216,3 +216,46 @@ def get_machines(request):
         return Response(data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def delete_all_machines(request):
+    """
+    Deletes all machines and their tasks.
+    - If `force_clean=true` is passed, deletes everything regardless of task status.
+    - Otherwise, only deletes machines that have no active tasks (running/paused).
+    """
+    try:
+        force_clean = str(request.data.get(
+            "force_clean", "false")).lower() == "true"
+
+        if force_clean:
+            # Nuke everything
+            ArduinoTask.objects.all().delete()
+            count, _ = ArduinoMachine.objects.all().delete()
+            return Response(
+                {"message": f"Force deleted {count} machines and all tasks"},
+                status=status.HTTP_200_OK
+            )
+
+        # Strict mode: only delete idle machines
+        machines = ArduinoMachine.objects.all()
+        removed_count = 0
+        skipped = 0
+        for m in machines:
+            active_tasks = m.tasks.filter(status__in=["running", "paused"])
+            if active_tasks.exists():
+                skipped += 1
+                continue
+            # delete idle tasks first
+            m.tasks.filter(status="idle").delete()
+            m.delete()
+            removed_count += 1
+
+        return Response(
+            {"message": f"Deleted {removed_count} machines, skipped {skipped} with active tasks"},
+            status=status.HTTP_200_OK
+        )
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

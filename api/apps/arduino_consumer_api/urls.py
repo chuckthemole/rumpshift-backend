@@ -8,7 +8,8 @@ from .views import (
     remove_machine,
     add_machine,
     get_machine,
-    get_machines
+    get_machines,
+    delete_all_machines
 )
 
 urlpatterns = [
@@ -26,4 +27,5 @@ urlpatterns = [
     path("arduino/add-machine/", add_machine, name="add_machine"),
     path("arduino/get-machine/<str:ip>/", get_machine, name="get_machine"),
     path("arduino/get-machines/", get_machines, name="get_machines"),
+    path("arduino/delete-machines/", delete_all_machines, name="delete_machines")
 ]
