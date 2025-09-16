@@ -1,0 +1,5 @@
+{
+    "Entry": "title",
+    "Temperature (C)": "number",
+    "Timestamp": "date"
+}
