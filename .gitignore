@@ -225,3 +225,5 @@ __marimo__/
 static/
 staticfiles/
 api/rumpshift_api_static/
+
+.env_*
