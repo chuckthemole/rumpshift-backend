@@ -220,3 +220,8 @@ __marimo__/
 #ignore migration files
 **/migrations/*.py
 !**/migrations/__init__.py
+
+# Local static files
+static/
+staticfiles/
+api/rumpshift_api_static/

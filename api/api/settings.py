@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from shared.utils.parsing import parse_env_list
 from pathlib import Path
 from dotenv import load_dotenv
 import os
@@ -18,16 +19,9 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
+ENV = os.getenv("DEVELOPMENT_ENV", "dev")
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG")
-
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
 
 # Application definition
@@ -41,7 +35,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'apps.notion_api',
-    'apps.arduino_consumer_api'
+    'apps.arduino_consumer_api',
+    'storages'
 ]
 
 MIDDLEWARE = [
@@ -55,9 +50,71 @@ MIDDLEWARE = [
 ]
 
 # ----------------------------
+# STATIC configuration
+# ----------------------------
+# Grab environment
+# ENV = os.getenv("DEVELOPMENT_ENV", "dev")  # default to dev if not set
+
+# Common settings
+# MEDIA_URL = "/media/"
+# MEDIA_ROOT = BASE_DIR / "media"
+
+# ----------------------------
+# STATIC / MEDIA configuration
+# ----------------------------
+if ENV == "prod":
+    # S3 bucket settings
+    AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
+    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME")
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+
+    # Folder prefix inside bucket
+    BUCKET_PREFIX = os.getenv("AWS_BUCKET_PREFIX")
+
+    STORAGES = {
+        "staticfiles": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "access_key": AWS_ACCESS_KEY_ID,
+                "secret_key": AWS_SECRET_ACCESS_KEY,
+                "bucket_name": AWS_STORAGE_BUCKET_NAME,
+                "region_name": AWS_S3_REGION_NAME,
+                "custom_domain": f"{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com",
+                "location": f"{BUCKET_PREFIX}/static",
+            },
+        },
+        "media": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "access_key": AWS_ACCESS_KEY_ID,
+                "secret_key": AWS_SECRET_ACCESS_KEY,
+                "bucket_name": AWS_STORAGE_BUCKET_NAME,
+                "region_name": AWS_S3_REGION_NAME,
+                "custom_domain": f"{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com",
+                "location": f"{BUCKET_PREFIX}/media",
+            },
+        },
+    }
+
+    STATICFILES_STORAGE = "staticfiles"
+    DEFAULT_FILE_STORAGE = "media"
+
+    STATIC_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/{BUCKET_PREFIX}/static/"
+    MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/{BUCKET_PREFIX}/media/"
+
+else:
+    # Local filesystem for development
+    STATIC_URL = "/static/"
+    STATIC_ROOT = BASE_DIR / "static"
+    STATICFILES_DIRS = [BASE_DIR / "staticfiles"]
+
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
+
+# ----------------------------
 # CORS configuration
 # ----------------------------
-from shared.utils.parsing import parse_env_list
 # Allow CORS for your React dev server (localhost:3000)
 # install django-cors-headers first: pip install django-cors-headers
 INSTALLED_APPS += ['corsheaders']
@@ -75,9 +132,13 @@ CORS_ALLOWED_ORIGINS = parse_env_list(os.getenv("CORS_ALLOWED_ORIGINS", ""))
 CORS_ALLOWED_ORIGIN_REGEXES = parse_env_list(
     os.getenv("CORS_ALLOWED_ORIGIN_REGEXES", ""))
 
+# ----------------------------
+# DEBUG
+# ----------------------------
 # Optional: log to verify during startup
 print("CORS_ALLOWED_ORIGINS:", CORS_ALLOWED_ORIGINS)
 print("CORS_ALLOWED_ORIGIN_REGEXES:", CORS_ALLOWED_ORIGIN_REGEXES)
+print("DEVELOPMENT_ENV:", ENV)
 
 ROOT_URLCONF = 'api.urls'
 
@@ -139,12 +200,6 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
-STATIC_URL = 'static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
