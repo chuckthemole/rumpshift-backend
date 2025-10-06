@@ -17,10 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
-from .url_constants import ADMIN_URL, NOTION_API, ARDUINO_CONSUMER_API
+from .url_constants import ADMIN_URL, NOTION_API, ARDUINO_CONSUMER_API, RUMPSHIFT_ANALYTICS_API
 
 urlpatterns = [
     path(ADMIN_URL, admin.site.urls),
     path(NOTION_API, include('apps.notion_api.urls')),
     path(ARDUINO_CONSUMER_API, include('apps.arduino_consumer_api.urls')),
+    path(RUMPSHIFT_ANALYTICS_API, include('apps.rumpshift_analytics_api.urls')),
 ]
