@@ -217,6 +217,15 @@ class CounterSessionDataView(APIView):
             # Group by user, but keep individual entries sorted by date
             df = df.sort_values(by=["User", "Begin Timestamp"])
 
+        elif view_mode == "individual_user":
+            # Filter by user (required)
+            if not users or len(users) != 1:
+                raise ValueError(
+                    "For individual_user view_mode, exactly one user must be specified")
+            df = df[df["User"] == users[0]]
+            # Sort by time for line chart
+            df = df.sort_values(by=["Begin Timestamp"])
+
         elif view_mode == "raw":
             # Return all entries as-is
             pass
