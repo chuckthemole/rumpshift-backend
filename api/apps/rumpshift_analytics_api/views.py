@@ -27,10 +27,15 @@ logger = get_logger(__name__)
 
 class CounterSessionDataView(APIView):
     """
-    Returns counter session data with optional filters, aggregation, and limits.
+    Returns counter session data with flexible grouping and aggregation options.
 
     Query parameters:
-        - group_by: column to group by ("User", "Begin Timestamp", etc.)
+        - view: display mode / grouping option
+            * "default" -> group by User, sum numeric fields (default)
+            * "user" -> each user, multiple entries allowed, sorted alphabetically by user
+            * "date" -> entries sorted by Begin Timestamp ascending
+            * "user_date" -> group by user but keep individual entries sorted by date
+            * "raw" -> no grouping, return all entries as-is
         - agg: aggregation type for Count/Duration ("sum", "mean", "max", "min")
         - limit: optional number of rows to return
         - user: optional, comma-separated list of users to filter
@@ -42,15 +47,10 @@ class CounterSessionDataView(APIView):
     ENDPOINT = "/notion-api/integrations/notion/consoleIntegration/database"
 
     def get(self, request):
-        """
-        Handles GET requests to return counter session data with optional filtering,
-        aggregation, and limits based on query parameters.
-        """
-
         # -------------------------------
         # Parse query parameters
         # -------------------------------
-        group_by = request.query_params.get("group_by")
+        view_mode = request.query_params.get("view", "default")
         agg = request.query_params.get("agg", "sum")
         limit = request.query_params.get("limit")
         users = request.query_params.get("user")
@@ -130,7 +130,7 @@ class CounterSessionDataView(APIView):
         df = pd.DataFrame(flat_data)
 
         # -------------------------------
-        # Transform data (filter, aggregate, limit)
+        # Transform data based on view mode
         # -------------------------------
         try:
             df_transformed = self.transform_data(
@@ -138,9 +138,9 @@ class CounterSessionDataView(APIView):
                 users=users,
                 start_date=start_date,
                 end_date=end_date,
-                group_by=group_by,
                 agg=agg,
-                limit=limit
+                limit=limit,
+                view_mode=view_mode
             )
         except ValueError as ve:
             logger.warning("Data transformation error: %s", ve)
@@ -153,20 +153,19 @@ class CounterSessionDataView(APIView):
         # Return JSON response
         # -------------------------------
         response_data = df_transformed.to_dict(orient="records")
-        logger.info(
-            "Returning %d records after filtering/aggregation", len(response_data))
+        logger.info("Returning %d records after transformation",
+                    len(response_data))
         return Response(response_data)
 
     # -----------------------------------------------------------------------------
     # Data Transformation Helper
     # -----------------------------------------------------------------------------
-    def transform_data(self, df, users=None, start_date=None, end_date=None, group_by=None, agg="sum", limit=None):
+    def transform_data(self, df, users=None, start_date=None, end_date=None, agg="sum", limit=None, view_mode="default"):
         """
-        Apply filtering, aggregation, and limiting to the DataFrame.
+        Apply filtering, grouping, sorting, aggregation, and limiting to the DataFrame.
 
         Raises ValueError for invalid dates or aggregation functions.
         """
-
         # Convert timestamp columns to datetime
         for col in ["Begin Timestamp", "End Timestamp"]:
             if col in df.columns:
@@ -196,14 +195,34 @@ class CounterSessionDataView(APIView):
                 raise ValueError(f"Invalid end date: {end_date}")
 
         # -------------------------------
-        # Apply aggregation
+        # Apply aggregation / grouping based on view_mode
         # -------------------------------
         numeric_cols = [col for col in [
             "Count", "Duration"] if col in df.columns]
-        if group_by and group_by in df.columns:
-            if agg not in ["sum", "mean", "max", "min"]:
-                raise ValueError(f"Invalid aggregation function: {agg}")
-            df = df.groupby(group_by, as_index=False)[numeric_cols].agg(agg)
+
+        if view_mode == "default":
+            # Default: group by User, sum numeric fields
+            if "User" in df.columns:
+                df = df.groupby("User", as_index=False)[numeric_cols].agg(agg)
+
+        elif view_mode == "user":
+            # User alphabetical, keep individual entries
+            df = df.sort_values(by=["User", "Begin Timestamp"])
+
+        elif view_mode == "date":
+            # Entries sorted by Begin Timestamp ascending
+            df = df.sort_values(by=["Begin Timestamp"])
+
+        elif view_mode == "user_date":
+            # Group by user, but keep individual entries sorted by date
+            df = df.sort_values(by=["User", "Begin Timestamp"])
+
+        elif view_mode == "raw":
+            # Return all entries as-is
+            pass
+
+        else:
+            raise ValueError(f"Invalid view_mode: {view_mode}")
 
         # -------------------------------
         # Apply limit
