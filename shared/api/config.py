@@ -25,11 +25,15 @@ from typing import Literal
 ENVIRONMENTS: tuple[Literal["development", "staging", "production"], ...] = (
     "development",
     "staging",
-    "production",
+    "production"
 )
 
 # Default to development unless explicitly set
 APP_ENV = os.getenv("DEVELOPMENT_ENV", "development").lower()
+
+# Normalize "prod" to "production", TODO: do this with other envs
+if APP_ENV == "prod":
+    APP_ENV = "production"
 
 if APP_ENV not in ENVIRONMENTS:
     raise ValueError(
