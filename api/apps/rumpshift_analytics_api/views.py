@@ -14,6 +14,7 @@ from rest_framework import status
 import pandas as pd
 from shared.api.api_client import ApiClient
 from shared.logger.logger import get_logger
+from django.conf import settings
 
 # -----------------------------------------------------------------------------
 # Logger
@@ -43,7 +44,7 @@ class CounterSessionDataView(APIView):
         - end: optional end date (ISO format)
     """
 
-    BASE_URL = "http://localhost:8888"
+    BASE_URL = getattr(settings, "SPRINGBOOT_URL", "http://localhost:8888")
     ENDPOINT = "/notion-api/integrations/notion/consoleIntegration/database"
 
     def get(self, request):

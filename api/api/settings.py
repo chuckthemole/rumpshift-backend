@@ -24,6 +24,14 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 DEBUG = os.getenv("DEBUG")
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
 
+# ==============================================
+# SERVICE URLS (Internal Communication)
+# ==============================================
+if ENV == "prod" or ENV == "production":
+    SPRINGBOOT_URL = os.getenv("LIVE_SPRINGBOOT_URL")
+if ENV == "development" or ENV == "dev":
+    SPRINGBOOT_URL = os.getenv("DEV_SPRINGBOOT_URL")
+
 # Application definition
 
 INSTALLED_APPS = [
