@@ -9,7 +9,9 @@ from .views import (
     add_machine,
     get_machine,
     get_machines,
-    delete_all_machines
+    delete_all_machines,
+    arduino_wakeup,
+    update_wakeup_payload
 )
 
 urlpatterns = [
@@ -21,6 +23,10 @@ urlpatterns = [
     path("arduino/get-tasks/", get_tasks, name="get_tasks"),
     path("arduino/task-status/<str:ip>/",
          arduino_task_status, name="arduino_task_status"),
+    path("arduino/wakeup/<str:machine_id>/",
+         arduino_wakeup, name="arduino_wakeup"),
+    path("arduino/wakeup/<str:machine_id>/update",
+         update_wakeup_payload, name="update_wakeup_payload"),
 
     # Machine endpoints
     path("arduino/remove-machine/", remove_machine, name="remove_machine"),

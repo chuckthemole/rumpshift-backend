@@ -12,6 +12,7 @@ class ArduinoMachine(models.Model):
     alias = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    wakeup_payload = models.JSONField(default=dict)
 
     class Meta:
         verbose_name = "Arduino Machine"

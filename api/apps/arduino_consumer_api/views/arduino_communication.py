@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from ..models import ArduinoTask, ArduinoMachine
+from django.utils import timezone
 
 
 @api_view(['POST'])
@@ -87,6 +88,52 @@ def arduino_task_status(request, ip):
         ])
     except ArduinoMachine.DoesNotExist:
         return Response({"error": "Machine not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+def arduino_wakeup(request, machine_id):
+    """
+    Return the current time and notify the backend that this machine is awake.
+    """
+    try:
+        machine = ArduinoMachine.objects.get(id=machine_id)
+    except ArduinoMachine.DoesNotExist:
+        return Response({"error": "Machine not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    now = timezone.now()
+    formatted_time = now.isoformat(timespec='milliseconds')
+
+    return Response({
+        "date_time": formatted_time,
+        "payload": machine.wakeup_payload or {}
+    })
+
+
+@api_view(['POST'])
+def update_wakeup_payload(request, machine_id):
+    """
+    Update the wakeup_payload for a given Arduino machine.
+    Expected JSON body:
+    {
+        "payload": { ... }  # arbitrary JSON object
+    }
+    """
+    try:
+        machine = ArduinoMachine.objects.get(id=machine_id)
+    except ArduinoMachine.DoesNotExist:
+        return Response({"error": "Machine not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    payload = request.data.get("payload")
+    if payload is None:
+        return Response({"error": "Missing 'payload' in request body"}, status=status.HTTP_400_BAD_REQUEST)
+
+    machine.wakeup_payload = payload
+    machine.save(update_fields=["wakeup_payload"])
+
+    return Response({
+        "message": "wakeup_payload updated successfully",
+        "payload": machine.wakeup_payload
+    })
 
 
 @api_view(['GET'])
