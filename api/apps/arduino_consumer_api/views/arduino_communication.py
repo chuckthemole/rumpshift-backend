@@ -104,7 +104,7 @@ def arduino_wakeup(request, machine_id):
     formatted_time = now.isoformat(timespec='milliseconds')
 
     return Response({
-        "date_time": formatted_time,
+        "datetime": formatted_time,
         "payload": machine.wakeup_payload or {}
     })
 
