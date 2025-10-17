@@ -31,7 +31,7 @@ urlpatterns = [
     # Machine endpoints
     path("arduino/remove-machine/", remove_machine, name="remove_machine"),
     path("arduino/add-machine/", add_machine, name="add_machine"),
-    path("arduino/get-machine/<str:ip>/", get_machine, name="get_machine"),
+    path("arduino/get-machine/<str:identifier>/", get_machine, name="get_machine"),
     path("arduino/get-machines/", get_machines, name="get_machines"),
     path("arduino/delete-machines/", delete_all_machines, name="delete_machines")
 ]

@@ -211,26 +211,47 @@ def add_machine(request):
 
 
 @api_view(['GET'])
-def get_machine(request, ip):
+def get_machine(request, identifier):
     """
-    Returns the details of a single machine by IP.
+    Returns the details of a single machine by IP or ID.
+    Mirrors the structure of get_machines for consistency.
+    Backward compatible: existing IP-based requests still work.
     """
     try:
-        machine = ArduinoMachine.objects.get(ip=ip)
-        # Include all tasks (optional: you can filter by status if needed)
-        tasks = machine.tasks.all()
+        # Detect if identifier looks like an integer → treat as ID
+        lookup_field = "id" if identifier.isdigit() else "ip"
+        filter_kwargs = {lookup_field: identifier}
+
+        machine = (
+            ArduinoMachine.objects
+            .prefetch_related('tasks')
+            .get(**filter_kwargs)
+        )
+
+        # Filter tasks (optional)
+        tasks = machine.tasks.filter(status__in=['running', 'paused'])
+
         data = {
+            "id": machine.id,
             "ip": machine.ip,
             "alias": machine.alias,
+            "wakeup_payload": machine.wakeup_payload,
+            "time": {
+                "created_at": machine.created_at,
+                "update_at": machine.updated_at,
+            },
             "tasks": [
                 {
                     "taskName": t.task_name,
                     "notes": t.notes,
-                    "status": t.status
-                } for t in tasks
-            ]
+                    "status": t.status,
+                }
+                for t in tasks
+            ],
         }
+
         return Response(data, status=status.HTTP_200_OK)
+
     except ArduinoMachine.DoesNotExist:
         return Response({"error": "Machine not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
@@ -250,8 +271,14 @@ def get_machines(request):
             tasks = m.tasks.filter(
                 status__in=['running', 'paused'])  # optional filter
             data.append({
+                "id": m.id,
                 "ip": m.ip,
                 "alias": m.alias,
+                "wakeup_payload": m.wakeup_payload,
+                "time": {
+                    "created_at": m.created_at,
+                    "update_at": m.updated_at
+                },
                 "tasks": [
                     {
                         "taskName": t.task_name,
