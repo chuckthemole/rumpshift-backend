@@ -21,7 +21,7 @@ urlpatterns = [
     # Task endpoints
     path("arduino/task-update/", arduino_task_update, name="arduino_task_update"),
     path("arduino/get-tasks/", get_tasks, name="get_tasks"),
-    path("arduino/task-status/<str:ip>/",
+    path("arduino/task-status/<str:identifier>/",
          arduino_task_status, name="arduino_task_status"),
     path("arduino/wakeup/<str:machine_id>/",
          arduino_wakeup, name="arduino_wakeup"),

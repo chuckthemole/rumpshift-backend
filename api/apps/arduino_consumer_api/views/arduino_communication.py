@@ -4,6 +4,12 @@ from rest_framework.response import Response
 from rest_framework import status
 from ..models import ArduinoTask, ArduinoMachine
 from django.utils import timezone
+from shared.logger.logger import get_logger
+
+# -----------------------------------------------------------------------------
+# Logger
+# -----------------------------------------------------------------------------
+logger = get_logger(__name__)
 
 
 @api_view(['POST'])
@@ -12,17 +18,20 @@ def arduino_task_update(request):
     Create or update a task for a machine.
     - For status 'kill', deletes the task.
     - For 'running' or 'paused', updates/creates the task.
-    Expects JSON: { "ip": "...", "alias": "...", "taskName": "...", "notes": "...", "status": "running|paused|kill" }
+    Expects JSON: 
+      { "id": <optional>, "ip": <optional>, "alias": "...", "taskName": "...", "notes": "...", "status": "running|paused|kill" }
+    Either 'id' or 'ip' must be provided.
     """
     data = request.data
+    machine_id = data.get('id')
     ip = data.get('ip')
     alias = data.get('alias')
     task_name = data.get('taskName')
     notes = data.get('notes', '')
     task_status = data.get('status')
 
-    if not ip or not task_status:
-        return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+    if not task_status:
+        return Response({"error": "Missing required field: status"}, status=status.HTTP_400_BAD_REQUEST)
 
     # Only require alias and task_name for non-kill operations
     if task_status != 'kill' and (not alias or not task_name):
@@ -31,10 +40,23 @@ def arduino_task_update(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    if not (machine_id or ip):
+        return Response({"error": "Provide either 'id' or 'ip' to identify the machine"}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
+        # Determine lookup
+        if machine_id:
+            lookup_field = 'id'
+            lookup_value = machine_id
+        else:
+            lookup_field = 'ip'
+            lookup_value = ip
+
+        filter_kwargs = {lookup_field: lookup_value}
+
         # Get or create the machine
         machine, _ = ArduinoMachine.objects.get_or_create(
-            ip=ip, defaults={'alias': alias})
+            defaults={'alias': alias}, **filter_kwargs)
 
         if task_status == 'kill':
             # Delete the specific task if it exists
@@ -47,7 +69,7 @@ def arduino_task_update(request):
                 status=status.HTTP_200_OK
             )
 
-        # Create or update the task for this machine
+        # Create or update the task
         task, created = ArduinoTask.objects.get_or_create(
             machine=machine,
             task_name=task_name,
@@ -55,13 +77,14 @@ def arduino_task_update(request):
         )
         task.status = task_status
         task.notes = notes
-        machine.alias = alias  # Update machine alias if changed
+        machine.alias = alias  # Update alias if changed
         machine.save()
         task.save()
 
         return Response({
             "message": f"Task {task_status}",
             "task": {
+                "id": machine.id,
                 "ip": machine.ip,
                 "alias": machine.alias,
                 "taskName": task.task_name,
@@ -70,24 +93,48 @@ def arduino_task_update(request):
             }
         }, status=status.HTTP_200_OK)
 
+    except ArduinoMachine.DoesNotExist:
+        return Response({"error": "Machine not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
-def arduino_task_status(request, ip):
+def arduino_task_status(request, identifier):
     """
-    Returns all running tasks for a given machine IP.
+    Returns all running tasks for a given machine by IP or ID.
+
+    URL example:
+    /api/arduino_task_status/<identifier>/
+
+    `identifier` can be:
+      - machine IP (string)
+      - machine ID (numeric)
+
+    Example:
+    /api/arduino_task_status/192.168.0.5/
+    /api/arduino_task_status/3/
     """
+    machine = None
+
     try:
-        machine = ArduinoMachine.objects.get(ip=ip)
-        tasks = ArduinoTask.objects.filter(machine=machine, status='running')
-        return Response([
-            {"taskName": t.task_name, "notes": t.notes, "status": t.status}
-            for t in tasks
-        ])
+        # Try to parse identifier as an integer ID
+        machine_id = int(identifier)
+        machine = ArduinoMachine.objects.get(id=machine_id)
+    except ValueError:
+        # Not an integer, treat as IP
+        try:
+            machine = ArduinoMachine.objects.get(ip=identifier)
+        except ArduinoMachine.DoesNotExist:
+            return Response({"error": "Machine not found"}, status=status.HTTP_404_NOT_FOUND)
     except ArduinoMachine.DoesNotExist:
         return Response({"error": "Machine not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    tasks = ArduinoTask.objects.filter(machine=machine, status='running')
+    return Response([
+        {"taskName": t.task_name, "notes": t.notes, "status": t.status}
+        for t in tasks
+    ])
 
 
 @api_view(['GET'])
@@ -146,6 +193,7 @@ def get_tasks(request):
         status__in=['running', 'paused']).select_related('machine')
     data = [
         {
+            "id": t.machine.id,
             "ip": t.machine.ip,
             "alias": t.machine.alias,
             "taskName": t.task_name,
@@ -164,11 +212,16 @@ def remove_machine(request):
     Expects JSON payload: { "ip": "192.168.0.10" }
     """
     ip = request.data.get('ip')
-    if not ip:
-        return Response({"error": "Missing machine IP"}, status=status.HTTP_400_BAD_REQUEST)
+    id = request.data.get('id')
+    if not ip and not id:
+        return Response({"error": "Missing identifier"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        machine = ArduinoMachine.objects.get(ip=ip)
+        machine = None
+        if id:
+            machine = ArduinoMachine.objects.get(id=id)
+        elif ip:
+            machine = ArduinoMachine.objects.get(ip=ip)
 
         # Check for active tasks
         active_tasks = machine.tasks.filter(status__in=['running', 'paused'])
@@ -198,16 +251,60 @@ def remove_machine(request):
 
 @api_view(['POST'])
 def add_machine(request):
-    ip = request.data.get('ip')
-    alias = request.data.get('alias')
-    if not ip or not alias:
-        return Response({"error": "Missing required fields"}, status=400)
-    machine, created = ArduinoMachine.objects.get_or_create(
-        ip=ip, defaults={'alias': alias})
-    if not created:
-        machine.alias = alias
-        machine.save()
-    return Response({"ip": machine.ip, "alias": machine.alias}, status=200)
+    try:
+        logger.debug("add_machine called with data: %s", request.data)
+
+        alias = request.data.get('alias')
+        ip = request.data.get('ip', None)  # Optional field
+
+        if not alias:
+            logger.warning("Missing required field: alias")
+            return Response({"error": "Missing required field: alias"}, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.debug("Using alias='%s', ip='%s'", alias, ip)
+
+        try:
+            if ip is None:
+                logger.debug(
+                    "IP is None, creating machine with alias=%s", alias)
+                machine = ArduinoMachine.objects.create(alias=alias, ip=None)
+                created = True  # because you always created it
+            else:
+                machine, created = ArduinoMachine.objects.get_or_create(
+                    ip=ip,
+                    defaults={'alias': alias}
+                )
+                logger.debug(
+                    "get_or_create called with ip=%s, alias=%s", ip, alias
+                )
+            logger.debug(
+                "Machine returned: %s, created: %s", machine, created
+            )
+        except Exception as db_exc:
+            logger.exception("Database error during get_or_create")
+            return Response({"error": f"Database error: {str(db_exc)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if not created:
+            try:
+                logger.debug(
+                    "Machine already exists, updating alias to '%s'", alias)
+                machine.alias = alias
+                machine.save()
+            except Exception as save_exc:
+                logger.exception("Error saving updated machine")
+                return Response({"error": f"Error updating machine: {str(save_exc)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(
+            {"ip": machine.ip, "alias": machine.alias},
+            status=status.HTTP_200_OK
+        )
+
+    except Exception as e:
+        logger.exception("Unhandled exception in add_machine")
+        return Response(
+            {"error": f"Unhandled exception: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['GET'])

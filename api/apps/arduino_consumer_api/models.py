@@ -8,7 +8,7 @@ class ArduinoMachine(models.Model):
     Stores IP and alias information for each machine.
     Tasks can be associated with a machine via the ArduinoTask model.
     """
-    ip = models.GenericIPAddressField(unique=True)
+    ip = models.GenericIPAddressField(unique=False, blank=True, null=True)
     alias = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
