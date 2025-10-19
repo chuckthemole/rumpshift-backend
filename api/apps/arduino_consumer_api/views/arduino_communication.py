@@ -254,57 +254,80 @@ def add_machine(request):
     try:
         logger.debug("add_machine called with data: %s", request.data)
 
+        machine_id = request.data.get('id', None)
         alias = request.data.get('alias')
-        ip = request.data.get('ip', None)  # Optional field
+        ip = request.data.get('ip', None)  # Optional
 
         if not alias:
             logger.warning("Missing required field: alias")
             return Response({"error": "Missing required field: alias"}, status=status.HTTP_400_BAD_REQUEST)
 
-        logger.debug("Using alias='%s', ip='%s'", alias, ip)
+        logger.debug("Parsed fields: id=%s, alias=%s, ip=%s",
+                     machine_id, alias, ip)
 
+        # --- Case 1: Updating existing by ID ---
+        if machine_id is not None:
+            logger.debug("Attempting to update machine with id=%s", machine_id)
+            try:
+                machine = ArduinoMachine.objects.get(id=machine_id)
+                machine.alias = alias
+                if ip is not None:
+                    machine.ip = ip
+                machine.save()
+                logger.debug("Updated machine: %s", machine)
+                return Response(
+                    {"id": machine.id, "ip": machine.ip,
+                        "alias": machine.alias, "updated": True},
+                    status=status.HTTP_200_OK
+                )
+            except ArduinoMachine.DoesNotExist:
+                logger.warning("Machine with id=%s not found", machine_id)
+                return Response({"error": f"Machine with id={machine_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as save_exc:
+                logger.exception(
+                    "Error updating machine with id=%s", machine_id)
+                return Response({"error": f"Error updating machine: {str(save_exc)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # --- Case 2: Create or get by IP ---
         try:
             if ip is None:
                 logger.debug(
-                    "IP is None, creating machine with alias=%s", alias)
+                    "IP is None, creating new machine with alias=%s", alias)
                 machine = ArduinoMachine.objects.create(alias=alias, ip=None)
-                created = True  # because you always created it
+                created = True
             else:
+                logger.debug(
+                    "Calling get_or_create with ip=%s, alias=%s", ip, alias)
                 machine, created = ArduinoMachine.objects.get_or_create(
                     ip=ip,
                     defaults={'alias': alias}
                 )
-                logger.debug(
-                    "get_or_create called with ip=%s, alias=%s", ip, alias
-                )
+
             logger.debug(
-                "Machine returned: %s, created: %s", machine, created
-            )
+                "get_or_create result: machine=%s, created=%s", machine, created)
         except Exception as db_exc:
             logger.exception("Database error during get_or_create")
             return Response({"error": f"Database error: {str(db_exc)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # --- Case 3: If not created, update alias ---
         if not created:
             try:
-                logger.debug(
-                    "Machine already exists, updating alias to '%s'", alias)
+                logger.debug("Machine exists, updating alias to '%s'", alias)
                 machine.alias = alias
                 machine.save()
             except Exception as save_exc:
-                logger.exception("Error saving updated machine")
+                logger.exception("Error saving updated existing machine")
                 return Response({"error": f"Error updating machine: {str(save_exc)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(
-            {"ip": machine.ip, "alias": machine.alias},
+            {"id": machine.id, "ip": machine.ip,
+                "alias": machine.alias, "created": created},
             status=status.HTTP_200_OK
         )
 
     except Exception as e:
         logger.exception("Unhandled exception in add_machine")
-        return Response(
-            {"error": f"Unhandled exception: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": f"Unhandled exception: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
