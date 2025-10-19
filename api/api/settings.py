@@ -121,6 +121,12 @@ else:
     MEDIA_URL = "/media/"
     MEDIA_ROOT = BASE_DIR / "media"
 
+
+# ----------------------------
+# CSRF configuration
+# ----------------------------
+CSRF_TRUSTED_ORIGINS = parse_env_list(os.getenv("CSRF_TRUSTED_ORIGINS", ""))
+
 # ----------------------------
 # CORS configuration
 # ----------------------------
