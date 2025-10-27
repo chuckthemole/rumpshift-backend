@@ -18,10 +18,18 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from .url_constants import ADMIN_URL, NOTION_API, ARDUINO_CONSUMER_API, RUMPSHIFT_ANALYTICS_API
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 urlpatterns = [
     path(ADMIN_URL, admin.site.urls),
     path(NOTION_API, include('apps.notion_api.urls')),
     path(ARDUINO_CONSUMER_API, include('apps.arduino_consumer_api.urls')),
     path(RUMPSHIFT_ANALYTICS_API, include('apps.rumpshift_analytics_api.urls')),
+
+    # -------------------------
+    # OPEN API
+    # -------------------------
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]

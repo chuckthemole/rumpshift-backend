@@ -2,6 +2,7 @@ import os
 import requests
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 # Load the Notion API token and (optionally) a default database ID from environment variables
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
@@ -9,6 +10,45 @@ NOTION_VERSION = os.getenv("NOTION_VERSION")
 NOTION_BASE_URL = "https://api.notion.com/v1/"
 
 
+@extend_schema(
+    summary="Query a Notion database",
+    description=(
+        "Fetches the content of a Notion database using its unique database ID. "
+        "This endpoint acts as a proxy to the Notion API's `/databases/{db_id}/query` endpoint. "
+        "Requires that your NOTION_API_KEY and NOTION_VERSION are correctly configured."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="db_id",
+            type=str,
+            location=OpenApiParameter.PATH,
+            description="The Notion database ID to query."
+        ),
+    ],
+    responses={
+        200: {
+            "description": "Successfully retrieved database content from Notion.",
+            "examples": [
+                OpenApiExample(
+                    "Sample Notion database response",
+                    summary="Example Notion data",
+                    value={
+                        "object": "list",
+                        "results": [
+                            {"object": "page", "id": "page_id_1", "properties": {
+                                "Name": {"title": [{"text": {"content": "Task A"}}]}}},
+                            {"object": "page", "id": "page_id_2", "properties": {
+                                "Name": {"title": [{"text": {"content": "Task B"}}]}}},
+                        ]
+                    },
+                ),
+            ],
+        },
+        400: {"description": "Invalid Notion database ID."},
+        401: {"description": "Unauthorized — check your Notion API key."},
+        500: {"description": "Unexpected error when contacting Notion API."},
+    },
+)
 @api_view(['GET'])
 def get_notion_database(request, db_id):
     """
