@@ -148,7 +148,8 @@ def log_to_notion_temp(request):
     # Ensure Timestamp exists
     timestamp_str = data.get("Timestamp")
     if not timestamp_str:
-        return Response({"error": "Timestamp is required."}, status=400)
+        timestamp_str = datetime.now(timezone.utc).isoformat(
+            timespec='seconds').replace("+00:00", "Z")
 
     # Convert Timestamp to Notion date object
     data["Timestamp"] = {"start": timestamp_str}
