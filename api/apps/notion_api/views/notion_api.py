@@ -2,9 +2,17 @@ import os
 import requests
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from shared.logger.logger import get_logger
 
-# Load the Notion API token and (optionally) a default database ID from environment variables
+# -----------------------------------------------------------------------------
+# Logger
+# -----------------------------------------------------------------------------
+logger = get_logger(__name__)
+
+# -----------------------------------------------------------------------------
+# Notion configuration
+# -----------------------------------------------------------------------------
 NOTION_API_KEY = os.getenv("NOTION_API_KEY")
 NOTION_VERSION = os.getenv("NOTION_VERSION")
 NOTION_BASE_URL = "https://api.notion.com/v1/"
@@ -14,8 +22,8 @@ NOTION_BASE_URL = "https://api.notion.com/v1/"
     summary="Query a Notion database",
     description=(
         "Fetches the content of a Notion database using its unique database ID. "
-        "This endpoint acts as a proxy to the Notion API's `/databases/{db_id}/query` endpoint. "
-        "Requires that your NOTION_API_KEY and NOTION_VERSION are correctly configured."
+        "Optionally, you can specify an integration key by providing `integration` as a query parameter. "
+        "If not provided, the default NOTION_API_KEY is used."
     ),
     parameters=[
         OpenApiParameter(
@@ -23,6 +31,12 @@ NOTION_BASE_URL = "https://api.notion.com/v1/"
             type=str,
             location=OpenApiParameter.PATH,
             description="The Notion database ID to query."
+        ),
+        OpenApiParameter(
+            name="integration",
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description="Optional environment variable name of the Notion API key to use."
         ),
     ],
     responses={
@@ -34,39 +48,38 @@ NOTION_BASE_URL = "https://api.notion.com/v1/"
 )
 @api_view(['GET'])
 def get_notion_database(request, db_id):
-    """
-    Query a Notion database by its ID and return its content.
+    integration_name = request.query_params.get("integration")
+    notion_api_key = os.getenv(
+        integration_name) if integration_name else NOTION_API_KEY
 
-    Params:
-        db_id (str): The Notion database ID to query.
+    logger.debug(
+        "get_notion_database called: db_id=%s, integration=%s", db_id, integration_name)
 
-    Returns:
-        JSON response with database content.
-    """
+    if not notion_api_key:
+        logger.error("No Notion API key found for integration: %s",
+                     integration_name)
+        return Response({"error": "Notion API key not found for the requested integration."}, status=400)
+
     url = f"{NOTION_BASE_URL}databases/{db_id}/query"
     headers = {
-        "Authorization": f"Bearer {NOTION_API_KEY}",  # Use secure token
-        # API version must match the version your integration supports
+        "Authorization": f"Bearer {notion_api_key}",
         "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     }
 
-    # Notion requires a POST even for querying databases
-    response = requests.post(url, headers=headers)
-
-    # Pass through the raw response from Notion
-    return Response(response.json(), status=response.status_code)
+    try:
+        logger.debug("Sending POST request to Notion: %s", url)
+        response = requests.post(url, headers=headers)
+        logger.debug("Notion response status: %s", response.status_code)
+        return Response(response.json(), status=response.status_code)
+    except Exception as e:
+        logger.exception("Error querying Notion database %s", db_id)
+        return Response({"error": str(e)}, status=500)
 
 
 @api_view(['GET'])
 def search_notion_databases(request):
-    """
-    Use Notion's search endpoint to find all databases accessible to the integration.
-
-    Returns:
-        A filtered list of database IDs and their titles.
-    """
-    print('search_notion_databases')  # TODO: Remove or replace with proper logging before deploying
+    logger.debug("search_notion_databases called")
 
     url = NOTION_BASE_URL + "search"
     headers = {
@@ -75,86 +88,182 @@ def search_notion_databases(request):
         "Content-Type": "application/json",
     }
 
-    # Filter the search to only return databases
-    data = {
-        "filter": {
-            "value": "database",
-            "property": "object"
-        }
-    }
+    data = {"filter": {"value": "database", "property": "object"}}
 
-    response = requests.post(url, headers=headers, json=data)
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        logger.debug("Notion search response status: %s", response.status_code)
 
-    if response.status_code == 200:
-        results = response.json().get("results", [])
-
-        # Extract only ID and title from each database
-        formatted = [
-            {
-                "id": db["id"],
-                "title": get_title_from_db(db)
-            }
-            for db in results
-        ]
-        return Response(formatted)
-    else:
-        # If an error occurs, pass through the original Notion response
-        return Response(response.json(), status=response.status_code)
+        if response.status_code == 200:
+            results = response.json().get("results", [])
+            formatted = [
+                {"id": db["id"], "title": get_title_from_db(db)} for db in results]
+            logger.debug("Found %d databases", len(formatted))
+            return Response(formatted)
+        else:
+            logger.error("Notion search failed: %s", response.text)
+            return Response(response.json(), status=response.status_code)
+    except Exception as e:
+        logger.exception("Error searching Notion databases")
+        return Response({"error": str(e)}, status=500)
 
 
 def get_title_from_db(db_obj):
-    """
-    Helper function to extract the plain-text title from a Notion database object.
-
-    Params:
-        db_obj (dict): A Notion database object from the API.
-
-    Returns:
-        str: The extracted plain-text title or a fallback.
-    """
     try:
         title_prop = db_obj.get("title", [])
         if title_prop and isinstance(title_prop, list):
             return title_prop[0].get("plain_text", "")
-    except Exception:
-        # In case Notion schema changes or malformed input
-        pass
+    except Exception as e:
+        logger.warning("Failed to extract title from database object: %s", e)
     return "(Untitled)"
 
 
+@extend_schema(
+    summary="List the block contents of a Notion page",
+    description=(
+        "Fetches the blocks/children inside a Notion page by its page ID. "
+        "Optionally specify an integration key via ?integration=ENV_VAR_NAME. "
+        "If omitted, uses the default NOTION_API_KEY."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="page_id",
+            type=str,
+            location=OpenApiParameter.PATH,
+            description="The Notion page ID to list contents for."
+        ),
+        OpenApiParameter(
+            name="integration",
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description="Optional environment variable name for a different Notion API key."
+        ),
+    ],
+    responses={
+        200: {"description": "Successfully retrieved the Notion page contents."},
+        400: {"description": "Invalid or missing Notion API key."},
+        401: {"description": "Unauthorized — Notion rejected API key."},
+        500: {"description": "Unexpected backend or network error."},
+    }
+)
 @api_view(['GET'])
 def list_notion_page_contents(request, page_id):
-    """
-    List the blocks (children) contained within a Notion page or block.
+    integration_name = request.query_params.get("integration")
 
-    Params:
-        page_id (str): The ID of the page or block to query.
+    # Determine which key to use
+    notion_api_key = os.getenv(
+        integration_name) if integration_name else NOTION_API_KEY
 
-    Returns:
-        List of block metadata (ID, type, has_children).
-    """
+    logger.debug(
+        "list_notion_page_contents called: page_id=%s, integration=%s, resolved_key=%s",
+        page_id,
+        integration_name,
+        "<default>" if not integration_name else integration_name
+    )
+
+    if not notion_api_key:
+        logger.error(
+            "No Notion API key available for integration '%s'", integration_name)
+        return Response(
+            {"error": "Notion API key not found for the requested integration."},
+            status=400
+        )
+
     url = f"{NOTION_BASE_URL}blocks/{page_id}/children"
     headers = {
-        "Authorization": f"Bearer {NOTION_API_KEY}",
+        "Authorization": f"Bearer {notion_api_key}",
         "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     }
 
-    response = requests.get(url, headers=headers)
+    logger.debug("Requesting Notion page blocks: GET %s", url)
 
-    if response.status_code == 200:
-        results = response.json().get("results", [])
+    try:
+        response = requests.get(url, headers=headers)
+        logger.debug(
+            "Notion response for page_id=%s — status=%s",
+            page_id,
+            response.status_code
+        )
 
-        # Extract relevant data from each block
-        formatted = [
-            {
-                "id": block["id"],
-                "type": block["type"],
-                "has_children": block.get("has_children", False)
-            }
-            for block in results
-        ]
-        return Response(formatted)
-    else:
-        # Forward any API errors from Notion
+        # Success
+        if response.status_code == 200:
+            raw_json = response.json()
+            blocks = raw_json.get("results", [])
+
+            logger.debug("Page %s returned %d blocks", page_id, len(blocks))
+
+            formatted = [
+                {
+                    "id": block["id"],
+                    "type": block["type"],
+                    "has_children": block.get("has_children", False)
+                }
+                for block in blocks
+            ]
+
+            return Response(formatted)
+
+        # Notion returned an error
+        logger.error(
+            "Error from Notion listing page %s: %s",
+            page_id,
+            response.text
+        )
         return Response(response.json(), status=response.status_code)
+
+    except Exception as e:
+        logger.exception(
+            "Exception listing page contents for page_id=%s", page_id)
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(['GET'])
+def get_notion_page(request, page_id):
+    integration_name = request.query_params.get("integration")
+    notion_api_key = os.getenv(
+        integration_name) if integration_name else NOTION_API_KEY
+
+    if not notion_api_key:
+        return Response({"error": "Missing API key"}, status=400)
+
+    url = f"{NOTION_BASE_URL}pages/{page_id}"
+    headers = {
+        "Authorization": f"Bearer {notion_api_key}",
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 200:
+            raw = response.json()
+
+            props = raw.get("properties", {})
+
+            # Turn Notion's rich property structure into simple output
+            formatted = {}
+            for k, v in props.items():
+                if v["type"] == "rich_text":
+                    formatted[k] = "".join([t["plain_text"]
+                                           for t in v["rich_text"]])
+                elif v["type"] == "title":
+                    formatted[k] = "".join([t["plain_text"]
+                                           for t in v["title"]])
+                elif v["type"] == "number":
+                    formatted[k] = v["number"]
+                elif v["type"] == "date":
+                    formatted[k] = v["date"]["start"] if v["date"] else None
+                elif v["type"] == "select":
+                    formatted[k] = v["select"]["name"] if v["select"] else None
+                else:
+                    formatted[k] = v
+
+            return Response(formatted)
+
+        return Response(response.json(), status=response.status_code)
+
+    except Exception as e:
+        logger.exception("Error fetching page")
+        return Response({"error": str(e)}, status=500)
