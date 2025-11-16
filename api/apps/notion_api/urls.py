@@ -1,5 +1,18 @@
 from django.urls import path
-from .views import get_notion_database, search_notion_databases, list_notion_page_contents, log_to_notion, run_coffee_grinder_script, run_notion_manager_script, create_log_database, clear_database, delete_database, log_to_notion_temp, get_notion_page
+from .views import (
+    get_notion_database,
+    search_notion_databases,
+    list_notion_page_contents,
+    log_to_notion,
+    run_coffee_grinder_script,
+    run_notion_manager_script,
+    create_log_database,
+    clear_database,
+    delete_database,
+    log_to_notion_temp,
+    get_notion_page,
+    compute_recipe,
+)
 from django.conf import settings
 from api.url_constants import GET_NOTION_DATABASE, SEARCH_NOTION_DATABASES, LIST_NOTION_PAGE_CONTENTS, LOG_TO_NOTION
 
@@ -19,6 +32,9 @@ urlpatterns = [
          name="clear_database"),
     path("delete-database/", delete_database,
          name="delete_database"),
+
+    path("recipes/compute/<str:recipe_id>/",
+         compute_recipe, name="compute_recipe"),
 
     path("log_temp/", log_to_notion_temp, name="log_to_notion_temp")
 ]

@@ -267,3 +267,109 @@ def get_notion_page(request, page_id):
     except Exception as e:
         logger.exception("Error fetching page")
         return Response({"error": str(e)}, status=500)
+
+
+@extend_schema(
+    summary="Update recipe inputs in Notion",
+    description=(
+        "Posts input values to a given Notion page (recipe) via its page ID in the path. "
+        "Notion formulas will compute dependent values automatically."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="recipe_id",
+            type=str,
+            location=OpenApiParameter.PATH,
+            description="The Notion page ID for the recipe to update."
+        ),
+        OpenApiParameter(
+            name="integration",
+            type=str,
+            location=OpenApiParameter.QUERY,
+            description="Optional environment variable name for a different Notion API key."
+        ),
+    ],
+    request={
+        "type": "object",
+        "properties": {
+            "inputs": {"type": "object"}
+        },
+        "required": ["inputs"]
+    },
+    responses={
+        200: {"description": "Successfully updated the recipe in Notion."},
+        400: {"description": "Missing or invalid inputs."},
+        500: {"description": "Error updating recipe in Notion."},
+    },
+)
+@api_view(['POST'])
+def compute_recipe(request, recipe_id):
+    """
+    Updates the input fields of a recipe page in Notion.
+    Dependent fields are automatically computed via Notion formulas.
+    Supports specifying a custom integration key via query parameter.
+    """
+    try:
+        # Determine which Notion API key to use
+        integration_name = request.query_params.get("integration")
+        notion_api_key = os.getenv(
+            integration_name) if integration_name else NOTION_API_KEY
+
+        if not notion_api_key:
+            logger.error(
+                "No Notion API key found for integration: %s", integration_name)
+            return Response({"error": "Notion API key not found for the requested integration."}, status=400)
+
+        inputs = request.data.get("inputs")
+        if not inputs or not isinstance(inputs, dict):
+            logger.error("Invalid inputs for recipe %s: %s",
+                         recipe_id, request.data)
+            return Response({"error": "Missing or invalid 'inputs' object"}, status=400)
+
+        logger.debug("Updating Notion recipe %s with inputs: %s",
+                     recipe_id, inputs)
+
+        url = f"{NOTION_BASE_URL}pages/{recipe_id}"
+        headers = {
+            "Authorization": f"Bearer {notion_api_key}",
+            "Notion-Version": NOTION_VERSION,
+            "Content-Type": "application/json",
+        }
+
+        # Format inputs for Notion page update
+        properties_payload = {}
+        for key, value in inputs.items():
+            # Convert empty string or None to null
+            if value == "" or value is None:
+                properties_payload[key] = {"number": None}  # default fallback
+                continue
+
+            # Detect if this is likely a date field
+            if isinstance(value, str) and "-" in value and key.lower().endswith("date"):
+                # Expecting ISO format for Notion date
+                properties_payload[key] = {"date": {"start": value}}
+            else:
+                try:
+                    # Attempt to treat as numeric
+                    properties_payload[key] = {"number": float(value)}
+                except (ValueError, TypeError):
+                    logger.warning(
+                        "Invalid value for field %s: %s, sending null instead", key, value
+                    )
+                    properties_payload[key] = {"number": None}
+
+        payload = {"properties": properties_payload}
+
+        response = requests.patch(url, headers=headers, json=payload)
+
+        if response.status_code != 200:
+            logger.error("Failed updating Notion page %s: %s",
+                         recipe_id, response.text)
+            return Response(response.json(), status=response.status_code)
+
+        logger.info("Successfully updated Notion recipe %s", recipe_id)
+        return Response({"status": "success", "recipeId": recipe_id}, status=200)
+
+    except Exception as e:
+        logger.exception("Error updating Notion recipe %s", recipe_id)
+        return Response({"error": str(e)}, status=500)
